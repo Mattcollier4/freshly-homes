@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
 import { supabase } from "@/lib/supabase";
 
 type BookingPayload = {
@@ -30,10 +31,29 @@ type BookingPayload = {
 
 export async function POST(request: Request) {
   try {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+      return NextResponse.json(
+        { error: "Missing RESEND_API_KEY environment variable" },
+        { status: 500 },
+      );
+    }
+
+    const resend = new Resend(resendApiKey);
     const body = (await request.json()) as Partial<BookingPayload>;
+    const service = body.service ?? "—";
+    const date = body.schedule?.date ?? "—";
+    const arrivalWindow = body.schedule?.arrivalWindow ?? "—";
+    const address = body.location?.address ?? "—";
+    const estimatedPrice = body.estimatedTotal ?? null;
+    const firstName = body.customer?.firstName ?? "";
+    const lastName = body.customer?.lastName ?? "";
+    const phone = body.customer?.phone ?? "—";
+    const clientEmail = body.customer?.email ?? "";
+    const clientName = `${firstName} ${lastName}`.trim() || "Client";
 
     const { error } = await supabase.from("bookings").insert({
-      service: body.service,
+      service,
       bedrooms: body.home?.bedrooms ?? null,
       bathrooms: body.home?.bathrooms ?? null,
       frequency: body.home?.frequency ?? null,
@@ -54,6 +74,91 @@ export async function POST(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!clientEmail) {
+      return NextResponse.json(
+        { error: "Client email is required to send confirmation" },
+        { status: 400 },
+      );
+    }
+
+    const estimatedPriceDisplay =
+      estimatedPrice !== null ? `$${estimatedPrice.toLocaleString()}` : "TBD";
+
+    const emailStyles = `
+      font-family: Arial, sans-serif; color: #1a1f1a; line-height: 1.6;
+    `;
+    const cardStyles = `
+      max-width: 620px; margin: 0 auto; border: 1px solid #e4e8e4;
+      border-radius: 12px; padding: 24px; background: #ffffff;
+    `;
+    const detailRowStyles = `
+      margin: 0; padding: 10px 0; border-bottom: 1px solid #e4e8e4;
+    `;
+
+    const confirmationHtml = `
+      <div style="${emailStyles}">
+        <div style="${cardStyles}">
+          <h1 style="margin: 0 0 4px; font-size: 24px;">Freshly Homes</h1>
+          <p style="margin: 0 0 20px; color: #1D9E75; font-weight: 600;">
+            Your home, always at its best.
+          </p>
+          <p style="margin: 0 0 16px;">Hi ${clientName}, your booking is confirmed.</p>
+          <p style="${detailRowStyles}"><strong>Service:</strong> ${service}</p>
+          <p style="${detailRowStyles}"><strong>Date:</strong> ${date}</p>
+          <p style="${detailRowStyles}"><strong>Arrival window:</strong> ${arrivalWindow}</p>
+          <p style="${detailRowStyles}"><strong>Address:</strong> ${address}</p>
+          <p style="margin: 0; padding: 10px 0 0;"><strong>Estimated price:</strong> ${estimatedPriceDisplay}</p>
+        </div>
+      </div>
+    `;
+
+    const internalNotificationHtml = `
+      <div style="${emailStyles}">
+        <div style="${cardStyles}">
+          <h1 style="margin: 0 0 4px; font-size: 24px;">New Freshly Homes Booking</h1>
+          <p style="margin: 0 0 20px; color: #1D9E75; font-weight: 600;">
+            Your home, always at its best.
+          </p>
+          <p style="${detailRowStyles}"><strong>Client:</strong> ${clientName}</p>
+          <p style="${detailRowStyles}"><strong>Email:</strong> ${clientEmail}</p>
+          <p style="${detailRowStyles}"><strong>Phone:</strong> ${phone}</p>
+          <p style="${detailRowStyles}"><strong>Service:</strong> ${service}</p>
+          <p style="${detailRowStyles}"><strong>Date:</strong> ${date}</p>
+          <p style="${detailRowStyles}"><strong>Arrival window:</strong> ${arrivalWindow}</p>
+          <p style="${detailRowStyles}"><strong>Address:</strong> ${address}</p>
+          <p style="margin: 0; padding: 10px 0 0;"><strong>Estimated price:</strong> ${estimatedPriceDisplay}</p>
+        </div>
+      </div>
+    `;
+
+    const [clientEmailResult, internalEmailResult] = await Promise.all([
+      resend.emails.send({
+        from: "bookings@freshly.homes",
+        to: clientEmail,
+        subject: "Your Freshly Homes booking confirmation",
+        html: confirmationHtml,
+      }),
+      resend.emails.send({
+        from: "bookings@freshly.homes",
+        to: "hello@freshly.homes",
+        subject: "New booking received",
+        html: internalNotificationHtml,
+      }),
+    ]);
+
+    if (clientEmailResult.error) {
+      return NextResponse.json(
+        { error: clientEmailResult.error.message },
+        { status: 500 },
+      );
+    }
+    if (internalEmailResult.error) {
+      return NextResponse.json(
+        { error: internalEmailResult.error.message },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ success: true });
