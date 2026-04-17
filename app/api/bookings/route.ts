@@ -42,15 +42,22 @@ export async function POST(request: Request) {
     const resend = new Resend(resendApiKey);
     const body = (await request.json()) as Partial<BookingPayload>;
     const service = body.service ?? "—";
+    const bedrooms = body.home?.bedrooms ?? "—";
+    const bathrooms = body.home?.bathrooms ?? "—";
+    const frequency = body.home?.frequency ?? "—";
+    const extras = body.home?.extras?.length ? body.home.extras.join(", ") : "None";
     const date = body.schedule?.date ?? "—";
     const arrivalWindow = body.schedule?.arrivalWindow ?? "—";
     const address = body.location?.address ?? "—";
+    const entryNotes = body.location?.entryInstructions ?? "—";
     const estimatedPrice = body.estimatedTotal ?? null;
     const firstName = body.customer?.firstName ?? "";
     const lastName = body.customer?.lastName ?? "";
     const phone = body.customer?.phone ?? "—";
     const clientEmail = body.customer?.email ?? "";
     const clientName = `${firstName} ${lastName}`.trim() || "Client";
+    const notes = body.notes ?? "—";
+    const referral = body.referral ?? "—";
 
     const { error } = await supabase.from("bookings").insert({
       service,
@@ -125,9 +132,16 @@ export async function POST(request: Request) {
           <p style="${detailRowStyles}"><strong>Email:</strong> ${clientEmail}</p>
           <p style="${detailRowStyles}"><strong>Phone:</strong> ${phone}</p>
           <p style="${detailRowStyles}"><strong>Service:</strong> ${service}</p>
+          <p style="${detailRowStyles}"><strong>Bedrooms:</strong> ${bedrooms}</p>
+          <p style="${detailRowStyles}"><strong>Bathrooms:</strong> ${bathrooms}</p>
+          <p style="${detailRowStyles}"><strong>Frequency:</strong> ${frequency}</p>
+          <p style="${detailRowStyles}"><strong>Extras:</strong> ${extras}</p>
           <p style="${detailRowStyles}"><strong>Date:</strong> ${date}</p>
           <p style="${detailRowStyles}"><strong>Arrival window:</strong> ${arrivalWindow}</p>
           <p style="${detailRowStyles}"><strong>Address:</strong> ${address}</p>
+          <p style="${detailRowStyles}"><strong>Entry notes:</strong> ${entryNotes}</p>
+          <p style="${detailRowStyles}"><strong>Additional notes:</strong> ${notes}</p>
+          <p style="${detailRowStyles}"><strong>Referral:</strong> ${referral}</p>
           <p style="margin: 0; padding: 10px 0 0;"><strong>Estimated price:</strong> ${estimatedPriceDisplay}</p>
         </div>
       </div>
@@ -135,14 +149,14 @@ export async function POST(request: Request) {
 
     const [clientEmailResult, internalEmailResult] = await Promise.all([
       resend.emails.send({
-        from: "bookings@freshly.homes",
+        from: "onboarding@resend.dev",
         to: clientEmail,
         subject: "Your Freshly Homes booking confirmation",
         html: confirmationHtml,
       }),
       resend.emails.send({
-        from: "bookings@freshly.homes",
-        to: "hello@freshly.homes",
+        from: "onboarding@resend.dev",
+        to: "matthewcollierjacob@gmail.com",
         subject: "New booking received",
         html: internalNotificationHtml,
       }),
