@@ -19,7 +19,16 @@ const cormorant = Cormorant_Garamond({
 
 const BASE_PRICE = 120;
 
-const serviceOptions = [
+type ServiceOption = {
+  id: "standard" | "deep" | "moveout";
+  name: string;
+  description: string;
+  multiplier: number;
+  chips: string[];
+  popular?: boolean;
+};
+
+const serviceOptions: ServiceOption[] = [
   {
     id: "standard",
     name: "Standard clean",
@@ -102,7 +111,7 @@ const timeSlots = [
   { label: "4-5 PM", value: "4:00 - 5:00 PM", unavailable: true },
 ] as const;
 
-type ServiceId = (typeof serviceOptions)[number]["id"];
+type ServiceId = ServiceOption["id"];
 
 function formatService(service: ServiceId | null) {
   if (!service) return "—";
